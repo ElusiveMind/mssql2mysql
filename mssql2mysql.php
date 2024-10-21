@@ -15,8 +15,11 @@ define('MYSQL_USER', '');
 define('MYSQL_PASSWORD','');
 define('MYSQL_DATABASE','');
 
-$tables_to_ignore = [];
+define('DEBUG', FALSE);
 
+$tables_to_contain = [];
+$tables_to_ignore = [];
+$tables_data_to_contain = [];
 $tables_data_to_ignore = [];
 
 /*
@@ -25,6 +28,7 @@ $tables_data_to_ignore = [];
 define('CHUNK_SIZE', 5000);
 
 set_time_limit(0);
+ini_set('memory_limit','1G');
 
 function addTilde($string) {
   return "`".$string."`";
@@ -46,10 +50,21 @@ $sql = "SELECT * FROM sys.Tables where schema_id=1;";
 echo "\n=> Getting tables..\n";
 $xx = 0;
 foreach ($mssql->query($sql) as $row) {
-  if (in_array($row['name'], $tables_to_ignore)) {
-    continue;
+  if (!empty($tables_to_contain)) {
+    foreach ($tables_to_contain as $ttc) {
+      $doit = (str_contains($row['name'], $ttc)) ? TRUE : FALSE;
+      print $ttc . " - " . $row['name'] . ' - ' . $doit . "\n";
+      if ($doit) {
+        if (in_array($row['name'], $tables_to_ignore)) {
+          continue;
+        }
+        array_push($mssql_tables, $row['name']);
+      }
+    }
   }
-  array_push($mssql_tables, $row['name']);
+  else {
+    array_push($mssql_tables, $row['name']);
+  }
 }
 echo "==> Found ". number_format(count($mssql_tables)) ." tables\n\n";
 
@@ -57,6 +72,7 @@ echo "==> Found ". number_format(count($mssql_tables)) ." tables\n\n";
 if (!empty($mssql_tables)) {
   $i = 1;
   foreach ($mssql_tables as $key => $table) {
+
     echo '====> ' . ($key + 1) . '. ' . $table . "\n";
     echo "=====> Getting info table " . $table . " from SQL Server\n";
 
@@ -70,15 +86,22 @@ if (!empty($mssql_tables)) {
       $mysql->query($mysql_query);
 
       $mysql_query = "CREATE TABLE `" . $table . "`";
-      $strctsql = $fields = $field_type = $field_null = array();
+      $strctsql = $fields = $field_type = $field_integer = $field_null = array();
 
       foreach ($mssql_rows as $row) {
-            $integer = FALSE;
+        $integer = FALSE;
         array_push($mssql_tables[$table], $row);
 
         switch ($row['DATA_TYPE']) {
           case 'bit':
+            $data_type = 'bit';
+            break;
+
           case 'tinyint':
+            $integer = TRUE;
+            $data_type = 'smallint';
+            break;
+
           case 'smallint':
           case 'int':
           case 'bigint':
@@ -106,7 +129,7 @@ if (!empty($mssql_tables)) {
           case 'timestamp':
           case 'time':
             $data_type = $row['DATA_TYPE'];
-                break;
+            break;
 
           case 'datetime2':
           case 'datetimeoffset':
@@ -141,7 +164,7 @@ if (!empty($mssql_tables)) {
 
           case 'binary':
           case 'varbinary':
-            $data_type = $data_type = $row['DATA_TYPE'];
+            $data_type = 'binary';
             break;
 
           case 'image':
@@ -155,7 +178,6 @@ if (!empty($mssql_tables)) {
 
           case 'cursor':
           case 'hierarchyid':
-          
           case 'table':
           case 'xml':
           default:
@@ -163,26 +185,48 @@ if (!empty($mssql_tables)) {
             break;
         }
 
+
         if (!empty($data_type)) {
-          $ssql = "`" . $row['COLUMN_NAME'] . "` " . $data_type . " " . ($row['IS_NULLABLE'] == 'YES' ? 'NULL' : 'NOT NULL');
+          if ($data_type == 'binary' || $data_type == 'varbinary') {
+            $ssql = "`" . $row['COLUMN_NAME'] . "` " . $data_type;
+          }
+          else {
+            $ssql = "`" . $row['COLUMN_NAME'] . "` " . $data_type . " " . ($row['IS_NULLABLE'] == 'YES' ? 'NULL' : 'NOT NULL');
+          }
           if (in_array($row['COLUMN_NAME'], $fields)) {
             unset($ssql);
             continue;
           }
           array_push($strctsql, $ssql);
           array_push($fields, $row['COLUMN_NAME']);  
-          array_push($field_type, $integer);
+          array_push($field_type, $row['DATA_TYPE']);
+          array_push($field_integer, $integer);
           array_push($field_null, ($row['IS_NULLABLE'] == 'YES') ? TRUE : FALSE);
         }
       }
 
       $mysql_query .= "(" . implode(',', $strctsql) . ");";
       echo "======> Creating table " . $table . " on MySQL... \n";
-      print $mysql_query . "\n";
+      if (DEBUG) {
+        print $mysql_query . "\n";
+      }
       $res = $mysql->query($mysql_query);
 
       if (in_array($table, $tables_data_to_ignore)) {
         continue;
+      }
+
+      if (!empty($tables_data_to_contain)) {
+        $doit = FALSE;
+        foreach ($tables_data_to_contain as $tdtc) {
+          if (str_contains($table, $tdtc)) {
+            $doit = TRUE;
+            break;
+          }
+        }
+        if ($doit === FALSE) {
+          continue;
+        }
       }
 
       echo "=====> Getting data from table " . $table . " on SQL Server\n";
@@ -199,8 +243,11 @@ if (!empty($mssql_tables)) {
           foreach ($rows as $row) {
             $datas = array();
             foreach ($fields as $key => $field) {
-              if ($field_type[$key] === TRUE) {
+              if ($field_integer[$key] === TRUE) {
                 $ddata = (!empty($row[$field])) ? (int) $row[$field] : 0;
+              }
+              elseif ($field_type[$key] == 'bit') {
+                $ddata = (!empty($row[$field])) ? "B'" . $row[$field] . "'" : "B'0'";
               }
               else {
                 if ($field_null[$key]) {
@@ -215,7 +262,9 @@ if (!empty($mssql_tables)) {
 
             if (!empty($datas)) {
               $mysql_query = "INSERT INTO `" . $table . "` (" . implode(',', $sfield) . ") VALUES (" . implode(',', $datas) . ");";
-              print $mysql_query . "\n\n";
+              if (DEBUG) {
+                print $mysql_query . "\n\n";
+              }
               $q = $mysql->query($mysql_query);
               $numdata += ($q ? 1 : 0 );
             }
