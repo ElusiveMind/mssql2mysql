@@ -6,7 +6,7 @@ Simple MSSQL Server to MySQL table converter using PHP CLI. Originally based off
 
 You will need to have the sqlserv driver for PHP PDO. I have done this on Ubuntu 22.04 and successfully used this script with PHP up to the latest release as of this writing which is PHP 8.3.
 
-You can find instructions for installing this [here](https://learn.microsoft.com/en-us/sql/connect/php/installation-tutorial-linux-mac?view=sql-server-ver16#installing-on-ubuntu). My work for this inside of a Docker container can be viewed in a future blog post git repository linked to from [FlyingFlip Studios, LLC](https://www.flyingflip.com).
+You can find instructions for installing this [here](https://learn.microsoft.com/en-us/sql/connect/php/installation-tutorial-linux-mac?view=sql-server-ver16#installing-on-ubuntu). My work for this inside of a Docker container can be viewed [HERE](https://github.com/ElusiveMind/mssql-ubuntu/blob/main/Dockerfile).
 
 ## Usage ##
 
