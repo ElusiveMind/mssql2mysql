@@ -48,12 +48,10 @@ $mssql_tables = array();
 $sql = "SELECT * FROM sys.Tables where schema_id=1;";
 
 echo "\n=> Getting tables..\n";
-$xx = 0;
 foreach ($mssql->query($sql) as $row) {
   if (!empty($tables_to_contain)) {
     foreach ($tables_to_contain as $ttc) {
       $doit = (str_contains($row['name'], $ttc)) ? TRUE : FALSE;
-      print $ttc . " - " . $row['name'] . ' - ' . $doit . "\n";
       if ($doit) {
         if (in_array($row['name'], $tables_to_ignore)) {
           continue;
@@ -70,7 +68,6 @@ echo "==> Found ". number_format(count($mssql_tables)) ." tables\n\n";
 
 // Get Table Structures
 if (!empty($mssql_tables)) {
-  $i = 1;
   foreach ($mssql_tables as $key => $table) {
 
     echo '====> ' . ($key + 1) . '. ' . $table . "\n";
