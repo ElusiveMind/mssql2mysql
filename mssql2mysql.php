@@ -178,7 +178,8 @@ if (!empty($mssql_tables)) {
           case 'table':
           case 'xml':
           default:
-            $data_type = false;
+            print "Errant Data Type: " . $row['DATA_TYPE'] . "\n\n";
+            $data_type = 'blob';
             break;
         }
 
